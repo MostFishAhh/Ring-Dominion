@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ring Dominion - Pro Wrestling Card Game</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS CDN for WebRTC Peer-to-Peer Networking -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ringGold: '#f59e0b',
+            ringRed: '#dc2626',
+            matDark: '#080c14',
+            matBorder: '#1e293b',
+            cardBg: '#0f172a'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            ring: ['Impact', 'Arial Black', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background: radial-gradient(circle at 50% 15%, #1e1b4b 0%, #090d16 55%, #030712 100%);
+      color: #f3f4f6;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow-x: hidden;
+    }
+    .rope-pattern {
+      background: repeating-linear-gradient(
+        90deg,
+        #dc2626,
+        #dc2626 20px,
+        #991b1b 20px,
+        #991b1b 40px
+      );
+    }
+    .card-shadow {
+      box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.8), 0 6px 8px -4px rgba(0, 0, 0, 0.7);
+    }
+    .glow-gold {
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.45);
+    }
+    .glow-red {
+      box-shadow: 0 0 15px rgba(220, 38, 38, 0.55);
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans text-sm md:text-base">
+
+  <!-- ================= LOBBY & MODE SELECTION OVERLAY ================= -->
+  <div id="lobbyScreen" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="max-w-xl w-full bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-6 shadow-2xl text-center relative overflow-hidden">
+      <!-- Decorative Ropes Header -->
+      <div class="absolute inset-x-0 top-0 h-2 rope-pattern"></div>
+
+      <div class="mt-2 mb-4">
+        <h1 class="text-4xl md:text-5xl font-ring tracking-wider text-amber-400 drop-shadow flex items-center justify-center gap-3">
+          <i class="fa-solid fa-trophy text-amber-500"></i> RING DOMINION
+        </h1>
+        <p class="text-xs md:text-sm text-slate-400 mt-1 uppercase tracking-widest font-bold">
+          Tactical Pro Wrestling Card Engine
+        </p>
+      </div>
+
+      <!-- Network / Mode Selector -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 text-left">
+        <!-- Online P2P Box -->
+        <div class="bg-slate-950 p-4 rounded-xl border border-blue-600/60 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-2 text-blue-400 font-bold text-sm mb-2">
+              <i class="fa-solid fa-globe"></i> ONLINE MULTIPLAYER (P2P)
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+              Play directly across the internet. Host a room code or connect to a friend's room.
+            </p>
+          </div>
+          
+          <div class="space-y-2">
+            <button onclick="startHostP2P()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs transition shadow flex items-center justify-center gap-2">
+              <i class="fa-solid fa-tower-broadcast"></i> HOST MATCH (GET CODE)
+            </button>
+            <div class="flex gap-1.5">
+              <input id="joinCodeInput" type="text" maxlength="4" placeholder="ROOM" class="w-24 bg-slate-900 border border-slate-700 uppercase font-mono text-center font-bold text-amber-400 rounded-lg text-xs px-2 focus:outline-none focus:border-blue-400">
+              <button onclick="joinP2PMatch()" class="flex-1 bg-slate-800 hover:bg-blue-700 border border-slate-700 hover:border-blue-500 text-slate-200 font-bold py-2 rounded-lg text-xs transition">
+                JOIN MATCH
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Local Modes Box -->
+        <div class="bg-slate-950 p-4 rounded-xl border border-amber-600/60 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-2 text-amber-400 font-bold text-sm mb-2">
+              <i class="fa-solid fa-gamepad"></i> LOCAL MODES
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+              Test deck mechanics against the Sparring AI or play two-handed on one device.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <button onclick="startLocalMatch('ai')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 rounded-lg text-xs transition shadow flex items-center justify-center gap-2">
+              <i class="fa-solid fa-robot"></i> SOLO VS SPARRING AI
+            </button>
+            <button onclick="startLocalMatch('pass')" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold py-2 rounded-lg text-xs transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-people-arrows"></i> PASS & PLAY (2 PLAYERS)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- P2P Room Host Status Overlay (hidden initially) -->
+      <div id="p2pStatusBanner" class="hidden my-3 p-3 bg-blue-950/70 border border-blue-500 rounded-xl text-xs text-blue-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-spinner animate-spin text-amber-400"></i>
+          <span>Room Code: <b id="hostCodeDisplay" class="font-mono text-base text-amber-400 tracking-wider">----</b></span>
+        </div>
+        <button onclick="copyRoomCode()" class="bg-blue-800 hover:bg-blue-700 px-2.5 py-1 rounded text-[11px] font-bold">
+          Copy Code
+        </button>
+      </div>
+
+      <div class="flex justify-between items-center text-xs text-slate-500 border-t border-slate-800 pt-3">
+        <span>30-Card Decks · 18 Moves · PeerJS WebRTC</span>
+        <button onclick="openRulebookModal()" class="text-amber-400 hover:underline">
+          <i class="fa-solid fa-book-open"></i> Full Card Catalog
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP HEADER / STATUS BAR -->
+  <header class="w-full bg-slate-950/90 backdrop-blur border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30 sticky top-0">
+    <div class="flex items-center gap-2 md:gap-3">
+      <span class="font-ring text-lg md:text-xl tracking-wider text-ringGold flex items-center gap-1.5">
+        <i class="fa-solid fa-trophy text-amber-500"></i> RING DOMINION
+      </span>
+      <span id="roundBadge" class="bg-slate-800 border border-slate-700 text-xs px-2.5 py-1 rounded-full text-slate-300 font-semibold">
+        ROUND 1
+      </span>
+      <span id="turnIndicator" class="bg-amber-950 border border-amber-700 text-amber-200 text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+        <span id="turnPlayerText">YOUR TURN</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span id="networkPill" class="hidden bg-blue-950 border border-blue-600 text-blue-300 text-xs px-2.5 py-1 rounded-full font-mono flex items-center gap-1">
+        <i class="fa-solid fa-wifi text-emerald-400"></i> <span id="networkRoomText">ROOM: ----</span>
+      </span>
+      <button onclick="toggleAudio()" id="audioBtn" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs p-1.5 px-2.5 rounded-lg text-slate-300">
+        <i class="fa-solid fa-volume-high"></i>
+      </button>
+      <button onclick="openRulebookModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs p-1.5 px-2.5 rounded-lg text-slate-300">
+        <i class="fa-solid fa-book-open"></i>
+      </button>
+      <button onclick="returnToLobby()" class="bg-slate-800 hover:bg-red-900 border border-slate-700 hover:border-red-600 text-xs p-1.5 px-2.5 rounded-lg text-slate-300">
+        <i class="fa-solid fa-door-open"></i> Lobby
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN RING CANVAS -->
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-2 md:p-3 gap-2.5 relative">
+
+    <!-- OPPONENT ZONE (TOP) -->
+    <section id="opponentArea" class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 flex flex-col gap-2 relative">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-blue-950 border border-blue-500 flex items-center justify-center font-bold text-blue-400 text-xs">
+            OPP
+          </div>
+          <div>
+            <div class="font-bold flex items-center gap-2">
+              <span id="oppNameLabel">Opponent</span>
+              <span id="oppStatusBadge" class="hidden text-xs bg-red-900/90 border border-red-500 text-red-200 px-2 py-0.5 rounded">Trapped in Boston Crab</span>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-3">
+              <span>Deck: <b id="oppDeckCount" class="text-slate-200">25</b></span>
+              <span>Hand: <b id="oppHandCount" class="text-slate-200">5</b></span>
+              <span>Graveyard: <b id="oppGraveCount" class="text-slate-200">0</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Opponent Vitals -->
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Momentum</div>
+            <div class="text-base font-bold text-amber-400 font-mono flex items-center gap-1 justify-end">
+              <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+              <span id="oppMomText">1 / 1</span>
+            </div>
+          </div>
+          <div class="w-28 md:w-44">
+            <div class="flex justify-between text-[11px] font-semibold mb-1">
+              <span class="text-slate-400">HEALTH</span>
+              <span id="oppHpText" class="text-emerald-400 font-mono">100 / 100</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-950 rounded-full border border-slate-700 overflow-hidden">
+              <div id="oppHpBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Opponent Setup Zone (5 Slots) -->
+      <div>
+        <div class="flex justify-between text-[10px] text-slate-400 mb-1 px-1">
+          <span class="uppercase tracking-wider font-bold">Opponent Setup Zone (5 Slots)</span>
+          <span class="text-slate-500">Auto-evaluates Left-to-Right</span>
+        </div>
+        <div class="grid grid-cols-5 gap-1.5 md:gap-2" id="oppSetupZone">
+          <!-- Slots rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER RING CLASH & LIVE COMMENTARY -->
+    <section class="flex-1 min-h-[150px] bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-col justify-between relative overflow-hidden">
+      <div class="absolute inset-x-0 top-0 h-1 rope-pattern opacity-70"></div>
+      <div class="absolute inset-x-0 bottom-0 h-1 rope-pattern opacity-70"></div>
+
+      <!-- Clash Visual Announcement -->
+      <div id="ringCenterDisplay" class="flex flex-col items-center justify-center my-auto py-1 text-center">
+        <h2 id="clashTitle" class="text-lg md:text-2xl font-ring tracking-wider text-slate-200">
+          BELL RINGS - SQUARED CIRCLE READY
+        </h2>
+        <p id="clashSubtext" class="text-xs text-slate-400 max-w-lg mt-0.5">
+          Draw cards, set traps in your Setup Zone, build momentum, and attack.
+        </p>
+
+        <!-- Active Submission Banner -->
+        <div id="activeSubmissionBanner" class="hidden mt-2 bg-red-950/90 border border-red-600 rounded-lg p-2 max-w-md w-full shadow-lg">
+          <div class="flex items-center justify-between text-xs font-bold text-red-300 mb-0.5">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-lock text-red-500"></i> SUBMISSION: BOSTON CRAB</span>
+            <span id="torqueStacksBadge" class="bg-red-800 text-white px-2 py-0.5 rounded text-[10px]">Torque: +0%</span>
+          </div>
+          <div class="text-[11px] text-slate-300 text-left">
+            Trapped: <b id="subTrappedName" class="text-amber-400">Opponent</b>. 
+            Tick: <b id="subTickDamage" class="text-red-400">8 HP</b> dealt at end of attacker's turn.
+          </div>
+        </div>
+      </div>
+
+      <!-- Play-by-Play Live Commentary Feed -->
+      <div class="mt-1 bg-slate-900/90 border border-slate-800 rounded-lg p-2 flex items-center gap-2 text-xs">
+        <span class="bg-red-900 text-red-200 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">
+          Commentary
+        </span>
+        <div id="commentaryFeed" class="text-slate-300 truncate w-full font-mono text-[11px]">
+          Match underway! Both combatants circle the canvas.
+        </div>
+      </div>
+    </section>
+
+    <!-- LOCAL PLAYER ZONE (BOTTOM) -->
+    <section id="playerArea" class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex flex-col gap-2">
+      <!-- Player Header & Vitals -->
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-amber-950 border border-amber-500 flex items-center justify-center font-bold text-amber-400 text-xs">
+            YOU
+          </div>
+          <div>
+            <div class="font-bold flex items-center gap-2">
+              <span id="playerNameLabel">You (Player 1)</span>
+              <span id="playerStatusBadge" class="hidden text-xs bg-red-900/90 border border-red-500 text-red-200 px-2 py-0.5 rounded">Trapped in Boston Crab</span>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-3">
+              <span>Deck: <b id="playerDeckCount" class="text-slate-200">25</b></span>
+              <span>Hand: <b id="playerHandCount" class="text-slate-200">5</b></span>
+              <span>Graveyard: <b id="playerGraveCount" class="text-slate-200">0</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Player Vitals -->
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Momentum</div>
+            <div class="text-base font-bold text-amber-400 font-mono flex items-center gap-1 justify-end">
+              <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+              <span id="playerMomText">1 / 1</span>
+            </div>
+          </div>
+          <div class="w-28 md:w-44">
+            <div class="flex justify-between text-[11px] font-semibold mb-1">
+              <span class="text-slate-400">HEALTH</span>
+              <span id="playerHpText" class="text-emerald-400 font-mono">100 / 100</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-950 rounded-full border border-slate-700 overflow-hidden">
+              <div id="playerHpBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Player Setup Zone (5 Slots) -->
+      <div>
+        <div class="flex justify-between text-[10px] text-slate-400 mb-1 px-1">
+          <span class="uppercase tracking-wider font-bold">Your Setup Zone (Bench / 5 Slots)</span>
+          <span class="text-slate-500">0 Mom to set · Active defensively immediately · 1 turn delay for offense</span>
+        </div>
+        <div class="grid grid-cols-5 gap-1.5 md:gap-2" id="playerSetupZone">
+          <!-- Slots rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Hand Tray & Action Controls -->
+      <div class="pt-1 border-t border-slate-800">
+        <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <span>Your Hand</span>
+            <span class="text-[10px] text-slate-500 font-normal">(Raw Hand Cost = 2x Printed Momentum unless [Quick])</span>
+          </span>
+          <div class="flex items-center gap-2">
+            <!-- Escape Submission Button -->
+            <button id="escapeSubBtn" onclick="openSubmissionEscapeModal()" class="hidden bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg shadow transition flex items-center gap-1">
+              <i class="fa-solid fa-handcuffs"></i> Escape Hold
+            </button>
+            <!-- Pin Opponent Button -->
+            <button id="pinActionBtn" onclick="requestInitiatePin()" disabled class="bg-slate-800 text-slate-500 border border-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+              <i class="fa-solid fa-stopwatch"></i> PIN OPPONENT
+            </button>
+            <!-- End Turn Button -->
+            <button id="endTurnBtn" onclick="requestEndTurn()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs px-3.5 py-1.5 rounded-lg shadow transition flex items-center gap-1">
+              <span>END TURN</span> <i class="fa-solid fa-forward-step text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hand Container -->
+        <div id="playerHandContainer" class="flex gap-2 overflow-x-auto pb-1.5 min-h-[140px] items-stretch">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= MODALS & POPUPS ================= -->
+
+  <!-- 1. UNIVERSAL 10-SECOND BLUFF REACTION WINDOW MODAL -->
+  <div id="reactionModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-red-600 rounded-2xl max-w-md w-full p-5 text-center shadow-2xl relative overflow-hidden">
+      <!-- 10-Second Countdown Progress Bar -->
+      <div class="absolute top-0 inset-x-0 h-2 bg-slate-800">
+        <div id="reactionTimerBar" class="h-full bg-red-600 transition-all duration-100 ease-linear" style="width: 100%;"></div>
+      </div>
+
+      <div class="mt-2 text-xs font-bold text-red-500 uppercase tracking-widest flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-triangle-exclamation animate-bounce"></i> REVERSAL OPPORTUNITY WINDOW
+      </div>
+
+      <h3 id="incomingMoveTitle" class="text-xl md:text-2xl font-ring tracking-wider text-white mt-1">
+        INCOMING ATTACK
+      </h3>
+      <div id="incomingMoveDesc" class="text-xs text-slate-400 my-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+        Evaluating defensive options...
+      </div>
+
+      <div class="my-3 flex items-center justify-center gap-2">
+        <span class="text-3xl font-mono font-black text-amber-400" id="reactionTimerText">10.0s</span>
+      </div>
+
+      <p id="reactionHelpText" class="text-[11px] text-slate-400 mb-4 italic">
+        Universal bluff buffer: Left-to-right Setup Zone check. If no counter or momentum exists, passing occurs.
+      </p>
+
+      <div id="reactionActionButtons" class="grid grid-cols-2 gap-3">
+        <button id="triggerCounterBtn" onclick="respondToCounterWindow(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-shield"></i> TRIGGER COUNTER
+        </button>
+        <button id="passCounterBtn" onclick="respondToCounterWindow(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-circle-xmark"></i> PASS / TAKE MOVE
+        </button>
+      </div>
+
+      <div id="reactionWaitingNotice" class="hidden text-xs text-slate-400 italic py-2">
+        Waiting for opponent's reaction decision...
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. DENY COUNTER MODAL -->
+  <div id="denyCounterModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl max-w-md w-full p-5 text-center shadow-2xl">
+      <div class="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+        <i class="fa-solid fa-shield-halved"></i> TACTICAL OVERRIDE DETECTED
+      </div>
+      <h3 class="text-xl font-ring tracking-wide text-white">REVERSAL THREATENED!</h3>
+      <p id="denyCounterText" class="text-xs text-slate-300 my-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
+        Opponent triggered a counter! Spend 2 Momentum from your floating pool to play DENY COUNTER and force your move through?
+      </p>
+      <div id="denyCounterButtons" class="grid grid-cols-2 gap-3 mt-4">
+        <button onclick="respondDenyCounter(true)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl shadow transition text-xs md:text-sm">
+          PLAY DENY COUNTER (2 MOM)
+        </button>
+        <button onclick="respondDenyCounter(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-3 rounded-xl border border-slate-700 transition text-xs md:text-sm">
+          ALLOW REVERSAL
+        </button>
+      </div>
+      <div id="denyWaitingNotice" class="hidden text-xs text-slate-400 italic py-2">
+        Waiting for attacker's Deny Counter decision...
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PINFALL RESOLUTION MODAL -->
+  <div id="pinModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-amber-600 rounded-2xl max-w-md w-full p-5 text-center shadow-2xl">
+      <div class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+        <i class="fa-solid fa-bell"></i> PINFALL ATTEMPT IN PROGRESS
+      </div>
+      <h3 id="pinModalTitle" class="text-2xl font-ring text-white tracking-wider">SHOULDERS ON THE MAT!</h3>
+      <p id="pinModalSubtitle" class="text-xs text-slate-300 my-2">
+        Referee slides into position: ONE... TWO... Choose your kickout escape!
+      </p>
+
+      <div class="my-3 bg-slate-950 p-3 rounded-xl border border-slate-800 text-left text-xs space-y-1.5">
+        <div class="flex justify-between">
+          <span class="text-slate-400">Defender's Current Health:</span>
+          <b id="pinDefenderHp" class="text-emerald-400 font-mono">100 HP</b>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">Momentum Kickout Cost:</span>
+          <b id="pinMomCostText" class="text-amber-400 font-mono">0 Mom next turn</b>
+        </div>
+      </div>
+
+      <div id="pinActionButtons" class="space-y-2">
+        <button id="momKickoutBtn" onclick="respondPinKickout('momentum')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between">
+          <span><i class="fa-solid fa-shield"></i> MOMENTUM KICKOUT (Guaranteed)</span>
+          <span id="momKickoutCostBadge" class="bg-blue-800 px-2 py-0.5 rounded text-[10px]">0 Mom</span>
+        </button>
+        <button id="adrenKickoutBtn" onclick="respondPinKickout('adrenaline')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between">
+          <span><i class="fa-solid fa-dice"></i> ADRENALINE KICKOUT (0 Mom)</span>
+          <span id="adrenKickoutTargetBadge" class="bg-amber-800 text-amber-100 px-2 py-0.5 rounded text-[10px]">Roll &le; HP</span>
+        </button>
+      </div>
+
+      <div id="pinWaitingNotice" class="hidden text-xs text-slate-400 italic py-2">
+        Defender is choosing kickout method...
+      </div>
+
+      <!-- Live Count Roll Animation -->
+      <div id="pinRollDisplay" class="hidden mt-3 pt-2 border-t border-slate-800">
+        <div class="text-[11px] text-slate-400 uppercase font-semibold">Referee 3-Count & Adrenaline Roll</div>
+        <div id="pinRollNumber" class="text-4xl font-mono font-black text-amber-400 my-1">--</div>
+        <div id="pinRollVerdict" class="text-xs font-bold text-white"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. SUBMISSION ESCAPE MODAL -->
+  <div id="subEscapeModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-purple-600 rounded-2xl max-w-md w-full p-5 text-center shadow-2xl">
+      <div class="text-xs font-bold text-purple-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+        <i class="fa-solid fa-lock"></i> SUBMISSION ESCAPE
+      </div>
+      <h3 class="text-xl font-ring text-white">BREAK THE BOSTON CRAB</h3>
+      <p class="text-xs text-slate-300 my-2">
+        You are trapped in an agonizing hold! Choose how to break free on your turn:
+      </p>
+
+      <div class="space-y-2 mt-3 text-left">
+        <button id="subRopeBreakBtn" onclick="respondSubEscape('ropebreak')" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between">
+          <span><i class="fa-solid fa-grip-lines"></i> PLAY ROPE BREAK CARD</span>
+          <span class="text-[10px] bg-emerald-900 px-2 py-0.5 rounded">Costs 2 Mom</span>
+        </button>
+        <button id="subMomEscapeBtn" onclick="respondSubEscape('momentum')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between">
+          <span><i class="fa-solid fa-bolt"></i> MOMENTUM ESCAPE</span>
+          <span class="text-[10px] bg-blue-800 px-2 py-0.5 rounded">Costs 3 Mom</span>
+        </button>
+        <button onclick="respondSubEscape('adrenaline')" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between">
+          <span><i class="fa-solid fa-dice"></i> ADRENALINE ROLL</span>
+          <span id="subAdrenBadge" class="text-[10px] bg-amber-800 text-amber-100 px-2 py-0.5 rounded">Roll &le; HP (Risk Tap Out if &le; 20 HP)</span>
+        </button>
+        <button onclick="closeModal('subEscapeModal')" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-xl border border-slate-700 text-xs text-center">
+          STAY IN HOLD / CONTINUE TURN
+        </button>
+      </div>
+
+      <div id="subRollVerdict" class="hidden mt-3 text-xs font-mono font-bold text-amber-400"></div>
+    </div>
+  </div>
+
+  <!-- 5. CARD INSPECTOR MODAL -->
+  <div id="cardInspectModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 text-left shadow-2xl relative">
+      <button onclick="closeModal('cardInspectModal')" class="absolute top-3 right-3 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="inspectContent"></div>
+    </div>
+  </div>
+
+  <!-- 6. RULEBOOK / FULL CATALOG MODAL -->
+  <div id="catalogModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="text-lg font-ring text-ringGold flex items-center gap-2">
+          <i class="fa-solid fa-book"></i> COMPLETE 18-CARD STARTER CATALOG
+        </h3>
+        <button onclick="closeModal('catalogModal')" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="p-4 overflow-y-auto space-y-2 flex-1" id="catalogCardList"></div>
+    </div>
+  </div>
+
+  <!-- 7. MATCH OVER MODAL -->
+  <div id="matchOverModal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-lg flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-ringGold rounded-2xl max-w-md w-full p-6 text-center shadow-2xl">
+      <i class="fa-solid fa-trophy text-5xl text-amber-400 mb-3"></i>
+      <h2 id="matchWinnerTitle" class="text-3xl font-ring text-white tracking-wider">PLAYER 1 WINS!</h2>
+      <p id="matchWinReason" class="text-sm text-slate-300 my-2">Three-Count Pinfall victory achieved!</p>
+      <div class="mt-5 flex gap-2 justify-center">
+        <button onclick="resetCurrentMatch()" class="bg-ringGold hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-5 rounded-xl transition text-xs">
+          REMATCH
+        </button>
+        <button onclick="returnToLobby()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-5 rounded-xl transition text-xs border border-slate-700">
+          MAIN LOBBY
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT GAME ENGINE ================= -->
+  <script>
+    /* =====================================================================
+       1. 18-CARD CATALOG DATABASE
+       ===================================================================== */
+    const CARD_CATALOG = {
+      1: { id: 1, name: "Knife Edge Chop", category: "Strike", cost: 1, dmg: 5, recur: 0, prop: "Quick", counters: [], flavor: "Stiff palm chop right across the chest. Uncounterable opening probe." },
+      2: { id: 2, name: "Dropkick", category: "Strike", cost: 2, dmg: 8, recur: 0, prop: "None", counters: ["Top-Rope Crossbody"], flavor: "Leaping dual-boot strike meeting airborne opponents." },
+      3: { id: 3, name: "Drop Toe Hold", category: "Strike", cost: 2, dmg: 4, recur: 0, prop: "None", counters: ["[Running]"], flavor: "Dropping low to trip a hard-charging opponent face-first." },
+      4: { id: 4, name: "Discus Lariat", category: "Strike", cost: 4, dmg: 15, recur: 0, prop: "Running", counters: [], flavor: "Spinning clothesline delivered with full sprint momentum." },
+      5: { id: 5, name: "Small Package", category: "Impact", cost: 2, dmg: 0, recur: 0, prop: "Flash Pin", counters: ["Snap Suplex", "Vertical Suplex", "Brainbuster", "Small Package"], flavor: "Inside leg-hook cradle shifting opponent's weight into an instant pin." },
+      6: { id: 6, name: "Snap Suplex", category: "Impact", cost: 3, dmg: 11, recur: 0, prop: "None", counters: ["Vertical Suplex", "Brainbuster"], flavor: "Snapping hips violently backward before opponent can hoist." },
+      7: { id: 7, name: "Back Body Drop", category: "Impact", cost: 3, dmg: 8, recur: 0, prop: "None", counters: ["[Running]", "Powerbomb"], flavor: "Bending at waist to launch a charging or hoisting foe overhead." },
+      8: { id: 8, name: "Body Slam", category: "Impact", cost: 4, dmg: 12, recur: 0, prop: "None", counters: ["Crossbody", "Top-Rope Crossbody"], flavor: "Scooping an incoming opponent out of mid-air and slamming them down." },
+      9: { id: 9, name: "Hurricanrana", category: "Impact", cost: 5, dmg: 13, recur: 0, prop: "None", counters: ["Powerbomb"], flavor: "Scissoring the neck at apex of hoist to whip opponent overhead." },
+      10: { id: 10, name: "Top-Rope Crossbody", category: "Impact", cost: 5, dmg: 20, recur: 0, prop: "Aerial", counters: [], flavor: "Launching horizontally from turnbuckle with high-risk velocity." },
+      11: { id: 11, name: "Powerbomb", category: "Impact", cost: 8, dmg: 25, recur: 0, prop: "None", counters: ["Hurricanrana"], flavor: "Deadlifting foe to shoulders and driving spine into canvas." },
+      12: { id: 12, name: "Boston Crab", category: "Submission", cost: 4, dmg: 8, recur: 8, prop: "None", counters: ["Dropkick"], flavor: "Catching legs, turning opponent onto stomach and arching spine." },
+      13: { id: 13, name: "Apply Torque", category: "Utility", cost: 2, dmg: 0, recur: 0, prop: "Torque", counters: [], flavor: "Wrenching active submission joints to ratchet up recurring tick (+50%)." },
+      14: { id: 14, name: "Feel the Crowd", category: "Utility", cost: 1, dmg: 0, recur: 0, prop: "None", counters: [], flavor: "Feeding on crowd energy to gain +2 Momentum on your next turn only." },
+      15: { id: 15, name: "Vertical Suplex", category: "Impact", cost: 5, dmg: 16, recur: 0, prop: "None", counters: [], flavor: "Stalling opponent upside-down before crashing backward." },
+      16: { id: 16, name: "Brainbuster", category: "Impact", cost: 8, dmg: 22, recur: 0, prop: "None", counters: ["Vertical Suplex", "Snap Suplex"], flavor: "Hoisting vertical before dropping directly down onto opponent's crown." },
+      17: { id: 17, name: "Deny Counter", category: "Utility", cost: 2, dmg: 0, recur: 0, prop: "None", counters: [], flavor: "Bracing against incoming reversal to force original attack through." },
+      18: { id: 18, name: "Rope Break", category: "Utility", cost: 2, dmg: 0, recur: 0, prop: "Quick", counters: [], flavor: "Clawing to bottom rope on your turn to break active submission." }
+    };
+
+    const STARTER_DECK_RECIPE = [
+      1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 16, 17, 18, 18
+    ].slice(0, 30); // 30 cards total
+
+    /* =====================================================================
+       2. SYNTHETIC AUDIO ENGINE (Web Audio API)
+       ===================================================================== */
+    let audioCtx = null;
+    let audioEnabled = true;
+
+    function getAudioContext() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playTone(freq, type, duration, gainVal = 0.1) {
+      if (!audioEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function soundRingBell() {
+      playTone(850, 'sine', 1.2, 0.25);
+      setTimeout(() => playTone(850, 'sine', 1.0, 0.2), 150);
+      setTimeout(() => playTone(850, 'sine', 1.5, 0.3), 350);
+    }
+    function soundMatSlam() {
+      playTone(110, 'triangle', 0.4, 0.4);
+      playTone(60, 'sawtooth', 0.5, 0.3);
+    }
+    function soundCounterWhoosh() {
+      playTone(400, 'sine', 0.25, 0.2);
+      setTimeout(() => playTone(650, 'triangle', 0.3, 0.2), 100);
+    }
+    function soundCountTap() {
+      playTone(180, 'square', 0.15, 0.3);
+    }
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      document.getElementById('audioBtn').innerHTML = audioEnabled
+        ? '<i class="fa-solid fa-volume-high"></i>'
+        : '<i class="fa-solid fa-volume-xmark text-red-400"></i>';
+      addCommentary(`Audio effects ${audioEnabled ? 'enabled' : 'muted'}.`);
+    }
+
+    /* =====================================================================
+       3. NETWORK STATE & PEERJS PROTOCOL
+       ===================================================================== */
+    let peer = null;
+    let peerConn = null;
+    let currentMode = 'ai'; // 'ai', 'pass', 'p2p-host', 'p2p-client'
+    let myPlayerIndex = 0;   // 0 = Player 1, 1 = Player 2
+    let isHost = true;       // Host is authoritative state keeper
+    let roomCode = "";
+
+    function generateRoomCode() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let res = "";
+      for (let i = 0; i < 4; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return res;
+    }
+
+    function startHostP2P() {
+      currentMode = 'p2p-host';
+      myPlayerIndex = 0;
+      isHost = true;
+      roomCode = generateRoomCode();
+
+      document.getElementById('p2pStatusBanner').classList.remove('hidden');
+      document.getElementById('hostCodeDisplay').innerText = roomCode;
+
+      const peerId = `ringdom-${roomCode}`;
+      peer = new Peer(peerId, { debug: 1 });
+
+      peer.on('open', (id) => {
+        addCommentary(`Lobby created. Room Code: ${roomCode}. Waiting for opponent...`);
+      });
+
+      peer.on('connection', (conn) => {
+        peerConn = conn;
+        setupPeerListeners();
+        conn.on('open', () => {
+          document.getElementById('lobbyScreen').classList.add('hidden');
+          document.getElementById('networkPill').classList.remove('hidden');
+          document.getElementById('networkRoomText').innerText = `ROOM: ${roomCode}`;
+          initAuthoritativeMatch();
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.error("Peer error:", err);
+        addCommentary(`Connection error: ${err.type}`);
+      });
+    }
+
+    function joinP2PMatch() {
+      const input = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+      if (input.length < 4) {
+        addCommentary("Please enter a valid 4-character room code.");
+        return;
+      }
+
+      currentMode = 'p2p-client';
+      myPlayerIndex = 1;
+      isHost = false;
+      roomCode = input;
+
+      peer = new Peer({ debug: 1 });
+      peer.on('open', () => {
+        const targetId = `ringdom-${roomCode}`;
+        peerConn = peer.connect(targetId);
+        setupPeerListeners();
+
+        peerConn.on('open', () => {
+          document.getElementById('lobbyScreen').classList.add('hidden');
+          document.getElementById('networkPill').classList.remove('hidden');
+          document.getElementById('networkRoomText').innerText = `ROOM: ${roomCode}`;
+          addCommentary(`Connected to Host room ${roomCode}! Awaiting match start...`);
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.error("Peer error:", err);
+        addCommentary(`Could not connect to room ${roomCode}. Verify code.`);
+      });
+    }
+
+    function setupPeerListeners() {
+      peerConn.on('data', (payload) => {
+        handleNetworkMessage(payload);
+      });
+      peerConn.on('close', () => {
+        addCommentary("Peer connection severed. Opponent disconnected.");
+      });
+    }
+
+    function sendNetworkMessage(type, data = {}) {
+      if (peerConn && peerConn.open) {
+        peerConn.send({ type, ...data });
+      }
+    }
+
+    function handleNetworkMessage(msg) {
+      if (isHost) {
+        // Host receives intents from client (Player 2)
+        switch (msg.type) {
+          case 'INTENT_PLAY_HAND':
+            playCardFromHand(msg.playerIndex, msg.handIndex);
+            break;
+          case 'INTENT_SET_CARD':
+            setCardToSetupZone(msg.playerIndex, msg.handIndex);
+            break;
+          case 'INTENT_PLAY_SETUP':
+            playCardFromSetup(msg.playerIndex, msg.slotIndex);
+            break;
+          case 'INTENT_DISCARD_SETUP':
+            discardFromSetupZone(msg.playerIndex, msg.slotIndex);
+            break;
+          case 'INTENT_COUNTER_DECISION':
+            handleCounterTrigger(msg.wantsToCounter);
+            break;
+          case 'INTENT_DENY_DECISION':
+            resolveDenyCounterChoice(msg.useDeny);
+            break;
+          case 'INTENT_PIN':
+            initiatePinfall(msg.attackerId, msg.defenderId, msg.isFlashPin);
+            break;
+          case 'INTENT_PIN_KICKOUT':
+            resolvePinKickout(msg.method);
+            break;
+          case 'INTENT_SUB_ESCAPE':
+            resolveSubEscapeChoice(msg.method);
+            break;
+          case 'INTENT_END_TURN':
+            endTurnAction();
+            break;
+        }
+      } else {
+        // Client receives state synchronization or prompts from Host
+        if (msg.type === 'SYNC_STATE') {
+          gameState = msg.state;
+          updateUI();
+        } else if (msg.type === 'SHOW_REACTION_MODAL') {
+          showReactionModalClient(msg.card);
+        } else if (msg.type === 'CLOSE_REACTION_MODAL') {
+          closeModal('reactionModal');
+        } else if (msg.type === 'SHOW_DENY_MODAL') {
+          showDenyModalClient(msg.counterCard);
+        } else if (msg.type === 'SHOW_PIN_MODAL') {
+          showPinModalClient(msg.defenderHp, msg.isLockedOut, msg.momCost);
+        } else if (msg.type === 'SHOW_PIN_ROLL') {
+          displayPinRollResult(msg.roll, msg.success, msg.threeCount);
+        } else if (msg.type === 'AUDIO') {
+          if (msg.sound === 'slam') soundMatSlam();
+          if (msg.sound === 'whoosh') soundCounterWhoosh();
+          if (msg.sound === 'bell') soundRingBell();
+          if (msg.sound === 'count') soundCountTap();
+        }
+      }
+    }
+
+    function broadcastState() {
+      if (isHost && peerConn && peerConn.open) {
+        sendNetworkMessage('SYNC_STATE', { state: gameState });
+      }
+      updateUI();
+    }
+
+    function copyRoomCode() {
+      if (!roomCode) return;
+      const el = document.createElement('textarea');
+      el.value = roomCode;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      addCommentary(`Room Code ${roomCode} copied to clipboard!`);
+    }
+
+    /* =====================================================================
+       4. GAME STATE ENGINE
+       ===================================================================== */
+    let gameState = {
+      round: 1,
+      turnPlayer: 0, // 0 = Player 1, 1 = Player 2
+      isGameOver: false,
+      players: [
+        {
+          name: "Player 1",
+          hp: 100,
+          momentum: 1,
+          maxMomentum: 1,
+          bonusNextTurn: 0,
+          penaltyNextTurn: 0,
+          deck: [],
+          hand: [],
+          setupZone: [null, null, null, null, null],
+          graveyard: [],
+          damageDealtThisTurn: 0,
+          isTrappedInSubmission: false
+        },
+        {
+          name: "Player 2",
+          hp: 100,
+          momentum: 1,
+          maxMomentum: 1,
+          bonusNextTurn: 0,
+          penaltyNextTurn: 0,
+          deck: [],
+          hand: [],
+          setupZone: [null, null, null, null, null],
+          graveyard: [],
+          damageDealtThisTurn: 0,
+          isTrappedInSubmission: false
+        }
+      ],
+      activeSubmission: null,
+      pendingAttack: null,
+      denyCounterPending: null
+    };
+
+    function startLocalMatch(mode) {
+      currentMode = mode;
+      myPlayerIndex = 0;
+      isHost = true;
+      document.getElementById('lobbyScreen').classList.add('hidden');
+      document.getElementById('networkPill').classList.add('hidden');
+      initAuthoritativeMatch();
+    }
+
+    function returnToLobby() {
+      if (peerConn) peerConn.close();
+      if (peer) peer.destroy();
+      document.getElementById('lobbyScreen').classList.remove('hidden');
+      document.getElementById('p2pStatusBanner').classList.add('hidden');
+      document.getElementById('matchOverModal').classList.add('hidden');
+    }
+
+    function resetCurrentMatch() {
+      closeModal('matchOverModal');
+      initAuthoritativeMatch();
+    }
+
+    function initAuthoritativeMatch() {
+      gameState.round = 1;
+      gameState.turnPlayer = 0;
+      gameState.isGameOver = false;
+      gameState.activeSubmission = null;
+      gameState.pendingAttack = null;
+      gameState.denyCounterPending = null;
+
+      // Seed 30-card decks
+      for (let p = 0; p < 2; p++) {
+        let deck = [...STARTER_DECK_RECIPE];
+        shuffleArray(deck);
+
+        // Seeding algorithm: extract 1-cost card for guaranteed turn-1 option
+        const oneCostIdx = deck.findIndex(id => CARD_CATALOG[id].cost === 1);
+        let openingHand = [];
+        if (oneCostIdx !== -1) {
+          openingHand.push(deck.splice(oneCostIdx, 1)[0]);
+        }
+        while (openingHand.length < 5 && deck.length > 0) {
+          openingHand.push(deck.pop());
+        }
+
+        gameState.players[p].hp = 100;
+        gameState.players[p].momentum = 1;
+        gameState.players[p].maxMomentum = 1;
+        gameState.players[p].bonusNextTurn = 0;
+        gameState.players[p].penaltyNextTurn = 0;
+        gameState.players[p].deck = deck;
+        gameState.players[p].hand = openingHand.map(id => ({ ...CARD_CATALOG[id] }));
+        gameState.players[p].setupZone = [null, null, null, null, null];
+        gameState.players[p].graveyard = [];
+        gameState.players[p].damageDealtThisTurn = 0;
+        gameState.players[p].isTrappedInSubmission = false;
+      }
+
+      if (currentMode === 'ai') {
+        gameState.players[0].name = "You (P1)";
+        gameState.players[1].name = "Sparring AI";
+      } else if (currentMode === 'pass') {
+        gameState.players[0].name = "Player 1";
+        gameState.players[1].name = "Player 2";
+      } else {
+        gameState.players[0].name = "Player 1 (Host)";
+        gameState.players[1].name = "Player 2 (Challenger)";
+      }
+
+      soundRingBell();
+      addCommentary("Ding! Ding! Ding! Bell rings for Round 1!");
+      broadcastState();
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    /* =====================================================================
+       5. TURN CYCLES & RECOVERY
+       ===================================================================== */
+    function startTurnForPlayer(pId) {
+      gameState.turnPlayer = pId;
+      const player = gameState.players[pId];
+
+      player.damageDealtThisTurn = 0;
+
+      // Momentum curve: min(10, Round) + bonus - penalty
+      let baseMom = Math.min(10, gameState.round);
+      if (player.bonusNextTurn > 0) {
+        baseMom += player.bonusNextTurn;
+        addCommentary(`${player.name} surges with +${player.bonusNextTurn} crowd bonus Momentum!`);
+        player.bonusNextTurn = 0;
+      }
+      if (player.penaltyNextTurn > 0) {
+        baseMom = Math.max(1, baseMom - player.penaltyNextTurn);
+        addCommentary(`${player.name} suffers -${player.penaltyNextTurn} Momentum penalty from failed pin!`);
+        player.penaltyNextTurn = 0;
+      }
+      player.maxMomentum = baseMom;
+      player.momentum = baseMom;
+
+      // Draw 1 card at start of turn
+      if (player.deck.length > 0) {
+        const drawnId = player.deck.pop();
+        player.hand.push({ ...CARD_CATALOG[drawnId] });
+      } else {
+        // Deck out check
+        handleDeckOut(pId);
+      }
+
+      addCommentary(`${player.name}'s turn starts. Momentum refreshed to ${player.momentum}.`);
+      broadcastState();
+
+      // Trigger AI turn if applicable
+      if (currentMode === 'ai' && pId === 1) {
+        setTimeout(runAiTurn, 1000);
+      }
+    }
+
+    function handleDeckOut(pId) {
+      const player = gameState.players[pId];
+      if (player.hp >= 16) {
+        player.hp = Math.max(1, player.hp - 15);
+        player.momentum = 0;
+        addCommentary(`${player.name} channels SECOND WIND (-15 HP, 0 Mom)! Recovering 5 cards from Graveyard.`);
+        for (let i = 0; i < 5 && player.graveyard.length > 0; i++) {
+          player.hand.push(player.graveyard.pop());
+        }
+      } else {
+        player.hp = 1;
+        player.momentum = player.maxMomentum;
+        addCommentary(`${player.name} channels FIGHTING SPIRIT / LAST GASP! HP reduced to 1!`);
+        if (player.graveyard.length > 0) {
+          player.hand.push(player.graveyard.pop());
+        }
+      }
+    }
+
+    function requestEndTurn() {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') {
+        addCommentary("It is not your turn!");
+        return;
+      }
+
+      if (isHost) {
+        endTurnAction();
+      } else {
+        sendNetworkMessage('INTENT_END_TURN');
+      }
+    }
+
+    function endTurnAction() {
+      const activeId = gameState.turnPlayer;
+      const nextId = 1 - activeId;
+
+      // Submission Recurring Tick: Triggers strictly at end of offensive wrestler's turn
+      if (gameState.activeSubmission && gameState.activeSubmission.attackerId === activeId) {
+        const tick = getSubmissionCurrentTick();
+        const victimId = gameState.activeSubmission.defenderId;
+        addCommentary(`END OF ATTACKER'S TURN: Submission pressure ticks for ${tick} damage to ${gameState.players[victimId].name}!`);
+        dealDamage(victimId, tick);
+      }
+
+      if (activeId === 1) {
+        gameState.round++;
+      }
+
+      startTurnForPlayer(nextId);
+    }
+
+    /* =====================================================================
+       6. SETUP ZONE & PLAY ACTIONS
+       ===================================================================== */
+    function requestSetCard(handIndex) {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') return;
+      if (isHost) {
+        setCardToSetupZone(myPlayerIndex, handIndex);
+      } else {
+        sendNetworkMessage('INTENT_SET_CARD', { playerIndex: myPlayerIndex, handIndex });
+      }
+    }
+
+    function setCardToSetupZone(pId, handIndex) {
+      const player = gameState.players[pId];
+      const emptySlot = player.setupZone.findIndex(s => s === null);
+      if (emptySlot === -1) {
+        addCommentary("Setup Zone is full! (5 Slots maximum). Discard a slot first.");
+        return;
+      }
+
+      const card = player.hand.splice(handIndex, 1)[0];
+      player.setupZone[emptySlot] = {
+        card: card,
+        setRound: gameState.round,
+        faceUp: false
+      };
+
+      addCommentary(`${player.name} placed a card face-down into Setup Slot #${emptySlot + 1}.`);
+      broadcastState();
+    }
+
+    function requestDiscardSetup(slotIndex) {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') return;
+      if (isHost) {
+        discardFromSetupZone(myPlayerIndex, slotIndex);
+      } else {
+        sendNetworkMessage('INTENT_DISCARD_SETUP', { playerIndex: myPlayerIndex, slotIndex });
+      }
+    }
+
+    function discardFromSetupZone(pId, slotIndex) {
+      const player = gameState.players[pId];
+      const slot = player.setupZone[slotIndex];
+      if (!slot) return;
+
+      player.graveyard.push(slot.card);
+      player.setupZone[slotIndex] = null;
+      addCommentary(`${player.name} discarded a card from Setup Slot #${slotIndex + 1} to the Graveyard.`);
+      broadcastState();
+    }
+
+    function requestPlayFromHand(handIndex) {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') return;
+      if (isHost) {
+        playCardFromHand(myPlayerIndex, handIndex);
+      } else {
+        sendNetworkMessage('INTENT_PLAY_HAND', { playerIndex: myPlayerIndex, handIndex });
+      }
+    }
+
+    function playCardFromHand(pId, handIndex) {
+      const player = gameState.players[pId];
+      const card = player.hand[handIndex];
+      if (!card) return;
+
+      if (card.id === 18 && !player.isTrappedInSubmission) {
+        addCommentary("Rope Break can only be played while trapped in a submission!");
+        return;
+      }
+      if (card.id === 13 && !gameState.activeSubmission) {
+        addCommentary("Apply Torque requires an active submission on canvas!");
+        return;
+      }
+
+      const effectiveCost = (card.prop === 'Quick') ? card.cost : (card.cost * 2);
+
+      if (player.momentum < effectiveCost) {
+        addCommentary(`Insufficient Momentum! Hand play costs ${effectiveCost} Mom (You have ${player.momentum}).`);
+        return;
+      }
+
+      player.momentum -= effectiveCost;
+      player.hand.splice(handIndex, 1);
+
+      declareOffensiveMove(pId, card, 'hand', null);
+    }
+
+    function requestPlayFromSetup(slotIndex) {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') return;
+      if (isHost) {
+        playCardFromSetup(myPlayerIndex, slotIndex);
+      } else {
+        sendNetworkMessage('INTENT_PLAY_SETUP', { playerIndex: myPlayerIndex, slotIndex });
+      }
+    }
+
+    function playCardFromSetup(pId, slotIndex) {
+      const player = gameState.players[pId];
+      const slot = player.setupZone[slotIndex];
+      if (!slot) return;
+
+      const card = slot.card;
+
+      if (slot.setRound === gameState.round) {
+        addCommentary("SETUP COOLDOWN: This card was set this round! Active for defense, but cannot be played offensively until next round.");
+        return;
+      }
+
+      if (card.id === 18 && !player.isTrappedInSubmission) {
+        addCommentary("Rope Break can only be played while trapped in a submission!");
+        return;
+      }
+      if (card.id === 13 && !gameState.activeSubmission) {
+        addCommentary("Apply Torque requires an active submission on canvas!");
+        return;
+      }
+      if (card.id === 17) {
+        addCommentary("Deny Counter can only be triggered in response to an opponent's counter!");
+        return;
+      }
+
+      if (player.momentum < card.cost) {
+        addCommentary(`Insufficient Momentum! ${card.name} requires ${card.cost} Mom.`);
+        return;
+      }
+
+      player.momentum -= card.cost;
+      player.setupZone[slotIndex] = null;
+
+      declareOffensiveMove(pId, card, 'setup', slotIndex);
+    }
+
+    /* =====================================================================
+       7. OFFENSIVE DECLARATION & 10S BLUFF WINDOW
+       ===================================================================== */
+    let reactionTimerInterval = null;
+    let reactionSecondsLeft = 10;
+
+    function declareOffensiveMove(attackerId, card, source, slotIndex) {
+      const defenderId = 1 - attackerId;
+      const attacker = gameState.players[attackerId];
+
+      soundMatSlam();
+      sendSound('slam');
+      addCommentary(`${attacker.name} attacks with ${card.name.toUpperCase()}!`);
+
+      const hasCounters = checkIfMoveHasCounters(card);
+
+      if (hasCounters) {
+        gameState.pendingAttack = { attackerId, defenderId, card, source };
+        start10SecondBluffWindow(defenderId, card);
+      } else {
+        resolveAttackImpact(attackerId, defenderId, card);
+      }
+    }
+
+    function checkIfMoveHasCounters(card) {
+      if (card.category === 'Utility') return false;
+      for (let id in CARD_CATALOG) {
+        const item = CARD_CATALOG[id];
+        if (item.counters.includes(card.name)) return true;
+        if (card.prop === 'Running' && item.counters.includes('[Running]')) return true;
+        if (card.prop === 'Aerial' && item.counters.includes('Top-Rope Crossbody')) return true;
+      }
+      return false;
+    }
+
+    function start10SecondBluffWindow(defenderId, card) {
+      reactionSecondsLeft = 10;
+      broadcastState();
+
+      if (isHost && peerConn && peerConn.open) {
+        sendNetworkMessage('SHOW_REACTION_MODAL', { card });
+      }
+
+      showReactionModalLocal(defenderId, card);
+
+      if (reactionTimerInterval) clearInterval(reactionTimerInterval);
+      reactionTimerInterval = setInterval(() => {
+        reactionSecondsLeft -= 0.1;
+        updateReactionTimerUI();
+        if (reactionSecondsLeft <= 0) {
+          clearInterval(reactionTimerInterval);
+          handleCounterTrigger(false);
+        }
+      }, 100);
+
+      // AI decision
+      if (currentMode === 'ai' && defenderId === 1) {
+        const delay = Math.floor(Math.random() * 2000) + 1000;
+        setTimeout(() => {
+          if (!gameState.pendingAttack) return;
+          const validSlot = findValidCounterSlot(1, card);
+          handleCounterTrigger(validSlot !== -1 && Math.random() > 0.15);
+        }, delay);
+      }
+    }
+
+    function showReactionModalLocal(defenderId, card) {
+      document.getElementById('incomingMoveTitle').innerText = card.name.toUpperCase();
+      document.getElementById('incomingMoveDesc').innerHTML = `
+        Attacker commits: <b class="text-amber-400">${card.name}</b> (${card.cost} Mom).
+        ${card.dmg > 0 ? `Impact: <b class="text-red-400">${card.dmg} Damage</b>.` : ''}
+        ${card.prop !== 'None' ? `<span class="bg-slate-800 text-amber-300 px-1 rounded ml-1">[${card.prop}]</span>` : ''}
+      `;
+
+      const isMeDefender = defenderId === myPlayerIndex || currentMode === 'pass';
+      document.getElementById('reactionActionButtons').classList.toggle('hidden', !isMeDefender);
+      document.getElementById('reactionWaitingNotice').classList.toggle('hidden', isMeDefender);
+
+      document.getElementById('reactionModal').classList.remove('hidden');
+    }
+
+    function showReactionModalClient(card) {
+      document.getElementById('incomingMoveTitle').innerText = card.name.toUpperCase();
+      document.getElementById('incomingMoveDesc').innerHTML = `
+        Attacker commits: <b class="text-amber-400">${card.name}</b> (${card.cost} Mom).
+      `;
+      const isMeDefender = 1 === myPlayerIndex;
+      document.getElementById('reactionActionButtons').classList.toggle('hidden', !isMeDefender);
+      document.getElementById('reactionWaitingNotice').classList.toggle('hidden', isMeDefender);
+      document.getElementById('reactionModal').classList.remove('hidden');
+
+      reactionSecondsLeft = 10;
+      if (reactionTimerInterval) clearInterval(reactionTimerInterval);
+      reactionTimerInterval = setInterval(() => {
+        reactionSecondsLeft -= 0.1;
+        updateReactionTimerUI();
+        if (reactionSecondsLeft <= 0) clearInterval(reactionTimerInterval);
+      }, 100);
+    }
+
+    function updateReactionTimerUI() {
+      const displayVal = Math.max(0, reactionSecondsLeft).toFixed(1);
+      document.getElementById('reactionTimerText').innerText = `${displayVal}s`;
+      const pct = (reactionSecondsLeft / 10) * 100;
+      document.getElementById('reactionTimerBar').style.width = `${pct}%`;
+    }
+
+    function respondToCounterWindow(wantsToCounter) {
+      if (isHost) {
+        handleCounterTrigger(wantsToCounter);
+      } else {
+        sendNetworkMessage('INTENT_COUNTER_DECISION', { wantsToCounter });
+      }
+    }
+
+    function handleCounterTrigger(wantsToCounter) {
+      if (reactionTimerInterval) clearInterval(reactionTimerInterval);
+      closeModal('reactionModal');
+      if (isHost && peerConn && peerConn.open) {
+        sendNetworkMessage('CLOSE_REACTION_MODAL');
+      }
+
+      if (!gameState.pendingAttack) return;
+
+      const { attackerId, defenderId, card } = gameState.pendingAttack;
+      const defender = gameState.players[defenderId];
+      const attacker = gameState.players[attackerId];
+
+      if (wantsToCounter) {
+        // Evaluate strictly Left to Right (Slot 0 to 4)
+        const validSlotIdx = findValidCounterSlot(defenderId, card);
+
+        if (validSlotIdx !== -1) {
+          const counterCard = defender.setupZone[validSlotIdx].card;
+          addCommentary(`${defender.name} triggers counter from Slot #${validSlotIdx + 1}: ${counterCard.name.toUpperCase()}!`);
+
+          // Check if attacker has Deny Counter in Setup Zone + >= 2 floating momentum!
+          const denySlotIdx = findDenyCounterSlot(attackerId);
+          if (denySlotIdx !== -1 && attacker.momentum >= 2) {
+            promptDenyCounter(attackerId, defenderId, counterCard, validSlotIdx);
+            return;
+          }
+
+          // Counter reverses attacker cleanly
+          executeCounterReversal(defenderId, attackerId, validSlotIdx);
+          return;
+        } else {
+          addCommentary(`${defender.name} attempted counter, but had no matching counter card or momentum! Bluff check failed.`);
+        }
+      } else {
+        addCommentary(`${defender.name} passed on counter window.`);
+      }
+
+      resolveAttackImpact(attackerId, defenderId, card);
+      gameState.pendingAttack = null;
+    }
+
+    function findValidCounterSlot(defenderId, move) {
+      const def = gameState.players[defenderId];
+      for (let i = 0; i < 5; i++) {
+        const slot = def.setupZone[i];
+        if (slot && slot.card) {
+          const c = slot.card;
+          if (def.momentum >= c.cost) {
+            if (c.counters.includes(move.name)) return i;
+            if (move.prop === 'Running' && c.counters.includes('[Running]')) return i;
+            if (move.prop === 'Aerial' && c.counters.includes('Top-Rope Crossbody')) return i;
+          }
+        }
+      }
+      return -1;
+    }
+
+    function findDenyCounterSlot(pId) {
+      const p = gameState.players[pId];
+      for (let i = 0; i < 5; i++) {
+        if (p.setupZone[i] && p.setupZone[i].card.id === 17) return i;
+      }
+      return -1;
+    }
+
+    function promptDenyCounter(attackerId, defenderId, counterCard, defenderSlotIdx) {
+      gameState.denyCounterPending = { attackerId, defenderId, counterCard, defenderSlotIdx };
+
+      if (attackerId === myPlayerIndex || currentMode === 'pass') {
+        document.getElementById('denyCounterText').innerHTML = `
+          Opponent triggered <b class="text-amber-400">${counterCard.name}</b>! Spend 2 Momentum from your floating pool to play DENY COUNTER?
+        `;
+        document.getElementById('denyCounterButtons').classList.remove('hidden');
+        document.getElementById('denyWaitingNotice').classList.add('hidden');
+        document.getElementById('denyCounterModal').classList.remove('hidden');
+      } else if (currentMode.startsWith('p2p')) {
+        sendNetworkMessage('SHOW_DENY_MODAL', { counterCard });
+      } else {
+        // AI attacker decision
+        resolveDenyCounterChoice(true);
+      }
+    }
+
+    function showDenyModalClient(counterCard) {
+      document.getElementById('denyCounterText').innerHTML = `
+        Opponent countered with <b class="text-amber-400">${counterCard.name}</b>! Spend 2 Momentum to play DENY COUNTER?
+      `;
+      document.getElementById('denyCounterButtons').classList.remove('hidden');
+      document.getElementById('denyWaitingNotice').classList.add('hidden');
+      document.getElementById('denyCounterModal').classList.remove('hidden');
+    }
+
+    function respondDenyCounter(useDeny) {
+      if (isHost) {
+        resolveDenyCounterChoice(useDeny);
+      } else {
+        sendNetworkMessage('INTENT_DENY_DECISION', { useDeny });
+        closeModal('denyCounterModal');
+      }
+    }
+
+    function resolveDenyCounterChoice(useDeny) {
+      closeModal('denyCounterModal');
+      if (!gameState.denyCounterPending) return;
+
+      const { attackerId, defenderId, counterCard, defenderSlotIdx } = gameState.denyCounterPending;
+      const attacker = gameState.players[attackerId];
+      const defender = gameState.players[defenderId];
+      const attackCard = gameState.pendingAttack.card;
+
+      if (useDeny) {
+        const denyIdx = findDenyCounterSlot(attackerId);
+        attacker.momentum -= 2;
+        attacker.graveyard.push(attacker.setupZone[denyIdx].card);
+        attacker.setupZone[denyIdx] = null;
+
+        defender.graveyard.push(defender.setupZone[defenderSlotIdx].card);
+        defender.setupZone[defenderSlotIdx] = null;
+
+        soundCounterWhoosh();
+        sendSound('whoosh');
+        addCommentary(`DENIED! ${attacker.name} spends 2 Momentum on DENY COUNTER, blasting through ${counterCard.name}!`);
+
+        resolveAttackImpact(attackerId, defenderId, attackCard);
+      } else {
+        addCommentary(`${attacker.name} chose not to deny the counter.`);
+        executeCounterReversal(defenderId, attackerId, defenderSlotIdx);
+      }
+
+      gameState.denyCounterPending = null;
+      gameState.pendingAttack = null;
+    }
+
+    function executeCounterReversal(reverserId, victimId, slotIdx) {
+      const reverser = gameState.players[reverserId];
+      const victim = gameState.players[victimId];
+      const counterCard = reverser.setupZone[slotIdx].card;
+
+      reverser.momentum -= counterCard.cost;
+      reverser.graveyard.push(counterCard);
+      reverser.setupZone[slotIdx] = null;
+
+      soundCounterWhoosh();
+      sendSound('whoosh');
+      addCommentary(`REVERSAL! ${reverser.name} counters with ${counterCard.name} (${counterCard.dmg} Dmg)!`);
+
+      if (counterCard.dmg > 0) {
+        dealDamage(victimId, counterCard.dmg);
+      }
+
+      if (counterCard.prop === 'Flash Pin') {
+        initiatePinfall(reverserId, victimId, true);
+        return;
+      }
+      if (counterCard.id === 12) {
+        applySubmissionHold(reverserId, victimId, counterCard);
+      }
+
+      addCommentary(`${victim.name}'s turn is shattered! Turn wiped.`);
+      gameState.pendingAttack = null;
+      broadcastState();
+
+      setTimeout(() => {
+        startTurnForPlayer(reverserId);
+      }, 1000);
+    }
+
+    /* =====================================================================
+       8. DAMAGE RESOLUTION & SPECIAL CARD ACTIONS
+       ===================================================================== */
+    function resolveAttackImpact(attackerId, defenderId, card) {
+      const attacker = gameState.players[attackerId];
+      attacker.graveyard.push(card);
+
+      if (card.dmg > 0) {
+        dealDamage(defenderId, card.dmg);
+        attacker.damageDealtThisTurn += card.dmg;
+      }
+      if (card.id === 12) {
+        applySubmissionHold(attackerId, defenderId, card);
+      }
+      if (card.id === 13 && gameState.activeSubmission) {
+        gameState.activeSubmission.torqueStacks = Math.min(3, gameState.activeSubmission.torqueStacks + 1);
+        addCommentary(`${attacker.name} cranks APPLY TORQUE! Tick increased to ${getSubmissionCurrentTick()} HP!`);
+      }
+      if (card.id === 14) {
+        attacker.bonusNextTurn = 2;
+        addCommentary(`${attacker.name} FEELS THE CROWD! +2 Momentum banked for next turn.`);
+      }
+      if (card.id === 18) {
+        breakSubmissionHold("Rope Break");
+      }
+      if (card.prop === 'Flash Pin') {
+        initiatePinfall(attackerId, defenderId, true);
+        return;
+      }
+
+      broadcastState();
+    }
+
+    function dealDamage(targetId, amount) {
+      const target = gameState.players[targetId];
+      target.hp = Math.max(0, target.hp - amount);
+      soundMatSlam();
+      sendSound('slam');
+      addCommentary(`${target.name} takes ${amount} damage! (HP: ${target.hp}/100)`);
+
+      if (target.hp <= 0) {
+        concludeMatch(1 - targetId, "Opponent knocked out cold!");
+      }
+      broadcastState();
+    }
+
+    function applySubmissionHold(attackerId, defenderId, card) {
+      gameState.activeSubmission = {
+        attackerId,
+        defenderId,
+        baseTick: card.recur,
+        torqueStacks: 0
+      };
+      gameState.players[defenderId].isTrappedInSubmission = true;
+      addCommentary(`${gameState.players[attackerId].name} locks in ${card.name}!`);
+      broadcastState();
+    }
+
+    function getSubmissionCurrentTick() {
+      if (!gameState.activeSubmission) return 0;
+      const base = gameState.activeSubmission.baseTick;
+      return base + (base * 0.5 * gameState.activeSubmission.torqueStacks);
+    }
+
+    function breakSubmissionHold(reason) {
+      if (!gameState.activeSubmission) return;
+      const defId = gameState.activeSubmission.defenderId;
+      gameState.players[defId].isTrappedInSubmission = false;
+      gameState.activeSubmission = null;
+      addCommentary(`SUBMISSION BROKEN via ${reason}!`);
+      broadcastState();
+    }
+
+    /* =====================================================================
+       9. PINFALL RESOLUTION ENGINE
+       ===================================================================== */
+    let activePinState = null;
+
+    function requestInitiatePin() {
+      if (gameState.turnPlayer !== myPlayerIndex && currentMode !== 'pass') return;
+      const attackerId = gameState.turnPlayer;
+      const defenderId = 1 - attackerId;
+
+      if (isHost) {
+        initiatePinfall(attackerId, defenderId, false);
+      } else {
+        sendNetworkMessage('INTENT_PIN', { attackerId, defenderId, isFlashPin: false });
+      }
+    }
+
+    function initiatePinfall(attackerId, defenderId, isFlashPin) {
+      const defender = gameState.players[defenderId];
+      activePinState = { attackerId, defenderId, isFlashPin };
+
+      const momCost = Math.floor((100 - defender.hp) / 10);
+      const isLockedOut = defender.hp <= 19;
+
+      if (isHost && peerConn && peerConn.open) {
+        sendNetworkMessage('SHOW_PIN_MODAL', { defenderHp: defender.hp, isLockedOut, momCost });
+      }
+
+      showPinModalLocal(defender.hp, isLockedOut, momCost, defenderId);
+
+      // AI kickout logic
+      if (currentMode === 'ai' && defenderId === 1) {
+        setTimeout(() => {
+          if (!isLockedOut && defender.hp > 45) {
+            resolvePinKickout('momentum');
+          } else {
+            resolvePinKickout('adrenaline');
+          }
+        }, 1200);
+      }
+    }
+
+    function showPinModalLocal(hp, isLockedOut, momCost, defenderId) {
+      document.getElementById('pinDefenderHp').innerText = `${hp} HP`;
+      document.getElementById('pinMomCostText').innerText = isLockedOut ? "LOCKED OUT (<= 19 HP)" : `${momCost} Mom next turn`;
+
+      const momBtn = document.getElementById('momKickoutBtn');
+      const momBadge = document.getElementById('momKickoutCostBadge');
+      if (isLockedOut) {
+        momBtn.disabled = true;
+        momBtn.className = "w-full bg-slate-800 text-slate-500 font-bold py-2 px-3 rounded-xl cursor-not-allowed text-xs flex items-center justify-between";
+        momBadge.innerText = "LOCKED OUT";
+      } else {
+        momBtn.disabled = false;
+        momBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between";
+        momBadge.innerText = `${momCost} Mom next turn`;
+      }
+
+      document.getElementById('adrenKickoutTargetBadge').innerText = `Roll <= ${hp}`;
+
+      const isMeDefender = defenderId === myPlayerIndex || currentMode === 'pass';
+      document.getElementById('pinActionButtons').classList.toggle('hidden', !isMeDefender);
+      document.getElementById('pinWaitingNotice').classList.toggle('hidden', isMeDefender);
+      document.getElementById('pinRollDisplay').classList.add('hidden');
+
+      document.getElementById('pinModal').classList.remove('hidden');
+    }
+
+    function showPinModalClient(hp, isLockedOut, momCost) {
+      showPinModalLocal(hp, isLockedOut, momCost, 1);
+    }
+
+    function respondPinKickout(method) {
+      if (isHost) {
+        resolvePinKickout(method);
+      } else {
+        sendNetworkMessage('INTENT_PIN_KICKOUT', { method });
+      }
+    }
+
+    function resolvePinKickout(method) {
+      if (!activePinState) return;
+      const { attackerId, defenderId, isFlashPin } = activePinState;
+      const defender = gameState.players[defenderId];
+
+      const rollDisplay = document.getElementById('pinRollDisplay');
+      const rollNum = document.getElementById('pinRollNumber');
+      const rollVerdict = document.getElementById('pinRollVerdict');
+      rollDisplay.classList.remove('hidden');
+
+      if (method === 'momentum') {
+        const cost = Math.floor((100 - defender.hp) / 10);
+        defender.penaltyNextTurn += cost;
+        soundCountTap();
+        sendSound('count');
+        rollNum.innerText = "KICKOUT!";
+        rollVerdict.innerHTML = `<span class="text-blue-400">Momentum Kickout Guaranteed! -${cost} Mom next turn.</span>`;
+
+        if (isHost && peerConn && peerConn.open) {
+          sendNetworkMessage('SHOW_PIN_ROLL', { roll: 'KICKOUT', success: true, threeCount: false });
+        }
+
+        setTimeout(() => {
+          closeModal('pinModal');
+          concludePinAttempt(attackerId, false, isFlashPin);
+        }, 1200);
+      } else {
+        // 1-100 Adrenaline Roll-Under Check
+        const finalRoll = Math.floor(Math.random() * 100) + 1;
+        const success = finalRoll <= defender.hp;
+
+        displayPinRollResult(finalRoll, success, !success);
+
+        if (isHost && peerConn && peerConn.open) {
+          sendNetworkMessage('SHOW_PIN_ROLL', { roll: finalRoll, success, threeCount: !success });
+        }
+
+        setTimeout(() => {
+          closeModal('pinModal');
+          if (success) {
+            concludePinAttempt(attackerId, false, isFlashPin);
+          } else {
+            concludeMatch(attackerId, "Three-Count Pinfall Victory!");
+          }
+        }, 1500);
+      }
+    }
+
+    function displayPinRollResult(roll, success, threeCount) {
+      const rollDisplay = document.getElementById('pinRollDisplay');
+      const rollNum = document.getElementById('pinRollNumber');
+      const rollVerdict = document.getElementById('pinRollVerdict');
+      rollDisplay.classList.remove('hidden');
+      rollNum.innerText = roll;
+
+      if (success) {
+        rollVerdict.innerHTML = `<span class="text-emerald-400 font-bold">KICKOUT AT 2.9!</span>`;
+      } else if (threeCount) {
+        soundRingBell();
+        rollVerdict.innerHTML = `<span class="text-red-500 font-black">ONE... TWO... THREE! PINNED!</span>`;
+      }
+    }
+
+    function concludePinAttempt(attackerId, isSuccess, isFlashPin) {
+      if (!isSuccess) {
+        if (!isFlashPin) {
+          gameState.players[attackerId].penaltyNextTurn += 2;
+          addCommentary(`Failed pin incurs -2 Momentum penalty next turn for ${gameState.players[attackerId].name}.`);
+        }
+        endTurnAction();
+      }
+    }
+
+    /* =====================================================================
+       10. SUBMISSION ESCAPE ENGINE
+       ===================================================================== */
+    function openSubmissionEscapeModal() {
+      const p = gameState.players[myPlayerIndex];
+      if (!p.isTrappedInSubmission) return;
+
+      const hasRope = p.hand.some(c => c.id === 18) || p.setupZone.some(s => s && s.card.id === 18);
+      document.getElementById('subRopeBreakBtn').style.display = hasRope ? 'flex' : 'none';
+
+      const momBtn = document.getElementById('subMomEscapeBtn');
+      momBtn.disabled = p.momentum < 3;
+      momBtn.className = p.momentum >= 3
+        ? "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl shadow transition text-xs flex items-center justify-between"
+        : "w-full bg-slate-800 text-slate-500 font-bold py-2 px-3 rounded-xl cursor-not-allowed text-xs flex items-center justify-between";
+
+      document.getElementById('subAdrenBadge').innerText = `Roll <= ${p.hp} (Tap out risk if <= 20 HP)`;
+      document.getElementById('subRollVerdict').classList.add('hidden');
+      document.getElementById('subEscapeModal').classList.remove('hidden');
+    }
+
+    function respondSubEscape(method) {
+      if (isHost) {
+        resolveSubEscapeChoice(method);
+      } else {
+        sendNetworkMessage('INTENT_SUB_ESCAPE', { method });
+      }
+    }
+
+    function resolveSubEscapeChoice(method) {
+      const pId = gameState.turnPlayer;
+      const player = gameState.players[pId];
+
+      if (method === 'ropebreak') {
+        if (player.momentum < 2) return;
+        player.momentum -= 2;
+        const hIdx = player.hand.findIndex(c => c.id === 18);
+        if (hIdx !== -1) player.hand.splice(hIdx, 1);
+        else {
+          const sIdx = player.setupZone.findIndex(s => s && s.card.id === 18);
+          if (sIdx !== -1) player.setupZone[sIdx] = null;
+        }
+        breakSubmissionHold("Rope Break card");
+        closeModal('subEscapeModal');
+      } else if (method === 'momentum') {
+        if (player.momentum < 3) return;
+        player.momentum -= 3;
+        breakSubmissionHold("Momentum Escape (3 Mom)");
+        closeModal('subEscapeModal');
+      } else if (method === 'adrenaline') {
+        const roll = Math.floor(Math.random() * 100) + 1;
+        const verdict = document.getElementById('subRollVerdict');
+        verdict.classList.remove('hidden');
+
+        if (roll <= player.hp) {
+          verdict.innerHTML = `<span class="text-emerald-400">SUCCESS! Rolled ${roll} &le; ${player.hp} HP. Broken!</span>`;
+          soundCounterWhoosh();
+          setTimeout(() => {
+            breakSubmissionHold(`Adrenaline Roll (${roll} vs ${player.hp} HP)`);
+            closeModal('subEscapeModal');
+          }, 1000);
+        } else {
+          if (player.hp <= 20) {
+            verdict.innerHTML = `<span class="text-red-500 font-bold">TAP OUT! Rolled ${roll} &gt; ${player.hp} HP (&le; 20 HP)!</span>`;
+            soundRingBell();
+            setTimeout(() => {
+              closeModal('subEscapeModal');
+              concludeMatch(1 - pId, "Defeat via Tap Out!");
+            }, 1200);
+          } else {
+            verdict.innerHTML = `<span class="text-amber-400">FAILED ESCAPE! Rolled ${roll} &gt; ${player.hp} HP. Hold holds!</span>`;
+            setTimeout(() => {
+              closeModal('subEscapeModal');
+            }, 1200);
+          }
+        }
+      }
+      broadcastState();
+    }
+
+    /* =====================================================================
+       11. SPARRING AI AGENT
+       ===================================================================== */
+    function runAiTurn() {
+      if (gameState.isGameOver || gameState.turnPlayer !== 1) return;
+      const ai = gameState.players[1];
+
+      // Escape submission
+      if (ai.isTrappedInSubmission) {
+        if (ai.momentum >= 3) {
+          ai.momentum -= 3;
+          breakSubmissionHold("AI Momentum Escape");
+        } else {
+          resolveSubEscapeChoice('adrenaline');
+        }
+      }
+
+      // Set card to setup zone if available
+      const emptySlot = ai.setupZone.findIndex(s => s === null);
+      if (emptySlot !== -1 && ai.hand.length > 2) {
+        const randIdx = Math.floor(Math.random() * ai.hand.length);
+        const card = ai.hand.splice(randIdx, 1)[0];
+        ai.setupZone[emptySlot] = {
+          card: card,
+          setRound: gameState.round,
+          faceUp: false
+        };
+        addCommentary(`Sparring AI placed a card face-down into Setup Slot #${emptySlot + 1}.`);
+      }
+
+      // Try offensive play from setup zone
+      let acted = false;
+      for (let i = 0; i < 5; i++) {
+        const slot = ai.setupZone[i];
+        if (slot && slot.setRound < gameState.round && slot.card.cost <= ai.momentum) {
+          playCardFromSetup(1, i);
+          acted = true;
+          break;
+        }
+      }
+
+      // Try play from hand
+      if (!acted) {
+        for (let i = 0; i < ai.hand.length; i++) {
+          const c = ai.hand[i];
+          const cost = (c.prop === 'Quick') ? c.cost : (c.cost * 2);
+          if (ai.momentum >= cost && c.id !== 17 && c.id !== 18) {
+            playCardFromHand(1, i);
+            acted = true;
+            break;
+          }
+        }
+      }
+
+      // Pin check or end turn
+      setTimeout(() => {
+        if (ai.damageDealtThisTurn > 0 && gameState.players[0].hp <= 35) {
+          initiatePinfall(1, 0, false);
+        } else {
+          endTurnAction();
+        }
+      }, 1500);
+    }
+
+    /* =====================================================================
+       12. MATCH CONCLUSION & UI RENDERING
+       ===================================================================== */
+    function concludeMatch(winnerId, reason) {
+      gameState.isGameOver = true;
+      const winner = gameState.players[winnerId];
+      document.getElementById('matchWinnerTitle').innerText = `${winner.name.toUpperCase()} WINS!`;
+      document.getElementById('matchWinReason').innerText = reason;
+      document.getElementById('matchOverModal').classList.remove('hidden');
+      soundRingBell();
+    }
+
+    function sendSound(type) {
+      if (isHost && peerConn && peerConn.open) {
+        sendNetworkMessage('AUDIO', { sound: type });
+      }
+    }
+
+    function updateUI() {
+      const myId = myPlayerIndex;
+      const oppId = 1 - myId;
+      const me = gameState.players[myId];
+      const opp = gameState.players[oppId];
+
+      document.getElementById('roundBadge').innerText = `ROUND ${gameState.round}`;
+      const isMyTurn = gameState.turnPlayer === myId;
+      document.getElementById('turnPlayerText').innerText = isMyTurn ? "YOUR TURN" : `${opp.name.toUpperCase()}'S TURN`;
+      document.getElementById('turnIndicator').className = isMyTurn
+        ? "bg-amber-950 border border-amber-700 text-amber-200 text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5"
+        : "bg-blue-950 border border-blue-700 text-blue-200 text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5";
+
+      // Vitals - Local Player
+      document.getElementById('playerNameLabel').innerText = me.name;
+      document.getElementById('playerHpText').innerText = `${me.hp} / 100`;
+      document.getElementById('playerHpBar').style.width = `${me.hp}%`;
+      document.getElementById('playerHpBar').className = me.hp > 50 ? "h-full bg-emerald-500 transition-all duration-300" : (me.hp > 20 ? "h-full bg-amber-500 transition-all duration-300" : "h-full bg-red-600 transition-all duration-300 animate-pulse");
+      document.getElementById('playerMomText').innerText = `${me.momentum} / ${me.maxMomentum}`;
+      document.getElementById('playerDeckCount').innerText = me.deck.length;
+      document.getElementById('playerHandCount').innerText = me.hand.length;
+      document.getElementById('playerGraveCount').innerText = me.graveyard.length;
+      document.getElementById('playerStatusBadge').classList.toggle('hidden', !me.isTrappedInSubmission);
+
+      // Vitals - Opponent
+      document.getElementById('oppNameLabel').innerText = opp.name;
+      document.getElementById('oppHpText').innerText = `${opp.hp} / 100`;
+      document.getElementById('oppHpBar').style.width = `${opp.hp}%`;
+      document.getElementById('oppHpBar').className = opp.hp > 50 ? "h-full bg-emerald-500 transition-all duration-300" : (opp.hp > 20 ? "h-full bg-amber-500 transition-all duration-300" : "h-full bg-red-600 transition-all duration-300 animate-pulse");
+      document.getElementById('oppMomText').innerText = `${opp.momentum} / ${opp.maxMomentum}`;
+      document.getElementById('oppDeckCount').innerText = opp.deck.length;
+      document.getElementById('oppHandCount').innerText = opp.hand.length;
+      document.getElementById('oppGraveCount').innerText = opp.graveyard.length;
+      document.getElementById('oppStatusBadge').classList.toggle('hidden', !opp.isTrappedInSubmission);
+
+      // Action Buttons
+      const pinBtn = document.getElementById('pinActionBtn');
+      const canPin = isMyTurn && me.damageDealtThisTurn > 0;
+      pinBtn.disabled = !canPin;
+      pinBtn.className = canPin
+        ? "bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-lg shadow-lg animate-pulse transition flex items-center gap-1 cursor-pointer"
+        : "bg-slate-800 text-slate-500 border border-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1 cursor-not-allowed";
+
+      document.getElementById('escapeSubBtn').classList.toggle('hidden', !me.isTrappedInSubmission || !isMyTurn);
+
+      // Submission status banner
+      const subBanner = document.getElementById('activeSubmissionBanner');
+      if (gameState.activeSubmission) {
+        subBanner.classList.remove('hidden');
+        document.getElementById('subTrappedName').innerText = gameState.players[gameState.activeSubmission.defenderId].name;
+        document.getElementById('subTickDamage').innerText = `${getSubmissionCurrentTick()} HP`;
+        document.getElementById('torqueStacksBadge').innerText = `Torque: +${gameState.activeSubmission.torqueStacks * 50}%`;
+      } else {
+        subBanner.classList.add('hidden');
+      }
+
+      renderSetupZone(oppId, 'oppSetupZone', false);
+      renderSetupZone(myId, 'playerSetupZone', true);
+      renderHandTray(myId);
+    }
+
+    function renderSetupZone(pId, containerId, isInteractive) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      const p = gameState.players[pId];
+
+      for (let i = 0; i < 5; i++) {
+        const slot = p.setupZone[i];
+        const el = document.createElement('div');
+
+        if (!slot) {
+          el.className = "h-20 md:h-24 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 flex flex-col items-center justify-center text-slate-600 text-[10px] font-semibold";
+          el.innerHTML = `<span>SLOT ${i + 1}</span><span class="text-[8px] text-slate-700">Empty</span>`;
+        } else {
+          const card = slot.card;
+          const isFresh = slot.setRound === gameState.round;
+
+          if (isInteractive) {
+            el.className = `h-20 md:h-24 rounded-lg border ${isFresh ? 'border-amber-600/70' : 'border-emerald-600/70'} bg-slate-900 p-1.5 flex flex-col justify-between text-left card-shadow text-[10px] relative`;
+            el.innerHTML = `
+              <div class="flex justify-between items-start">
+                <span class="font-bold text-amber-400 font-mono">${card.cost}M</span>
+                <span class="${isFresh ? 'text-amber-400' : 'text-emerald-400'} font-bold">${isFresh ? 'SET' : 'READY'}</span>
+              </div>
+              <div class="my-auto truncate">
+                <div class="font-bold text-white text-[11px] truncate">${card.name}</div>
+                <div class="text-[9px] text-slate-400 truncate">${card.category}</div>
+              </div>
+              <div class="flex gap-1 justify-end pt-1">
+                ${gameState.turnPlayer === pId && !isFresh ? `<button onclick="requestPlayFromSetup(${i})" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-1.5 py-0.5 rounded text-[8px]">PLAY</button>` : ''}
+                ${gameState.turnPlayer === pId ? `<button onclick="requestDiscardSetup(${i})" class="text-slate-500 hover:text-red-400 text-[9px]"><i class="fa-solid fa-trash"></i></button>` : ''}
+              </div>
+            `;
+          } else {
+            // Face-down opponent view
+            el.className = "h-20 md:h-24 rounded-lg border border-slate-800 bg-slate-950 flex flex-col items-center justify-center text-slate-600";
+            el.innerHTML = `
+              <i class="fa-solid fa-shield text-slate-700 text-sm"></i>
+              <span class="text-[8px] text-slate-600 font-mono mt-1">SLOT ${i + 1}</span>
+            `;
+          }
+        }
+        container.appendChild(el);
+      }
+    }
+
+    function renderHandTray(pId) {
+      const container = document.getElementById('playerHandContainer');
+      container.innerHTML = '';
+      const p = gameState.players[pId];
+
+      if (p.hand.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-500 italic py-4 px-2">Hand is empty. Use Setup Zone cards or pass turn.</div>`;
+        return;
+      }
+
+      p.hand.forEach((card, idx) => {
+        const rawHandCost = (card.prop === 'Quick') ? card.cost : (card.cost * 2);
+        const canAfford = p.momentum >= rawHandCost;
+
+        const el = document.createElement('div');
+        el.className = `w-28 md:w-32 shrink-0 bg-slate-900 border ${canAfford ? 'border-slate-700 hover:border-amber-500' : 'border-slate-800 opacity-75'} rounded-xl p-2 flex flex-col justify-between text-left card-shadow text-[10px] transition`;
+
+        el.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center text-[9px] mb-0.5">
+              <span class="font-bold text-amber-400 font-mono">${card.cost} Mom</span>
+              <span class="text-slate-400">${card.category}</span>
+            </div>
+            <div class="font-bold text-white text-xs leading-tight mb-0.5 truncate">${card.name}</div>
+            <div class="text-[9px] text-slate-300">
+              ${card.dmg > 0 ? `<b class="text-red-400">${card.dmg} Dmg</b>` : ''}
+              ${card.prop !== 'None' ? `<span class="text-amber-300 ml-1">[${card.prop}]</span>` : ''}
+            </div>
+          </div>
+
+          <div class="space-y-1 mt-1.5">
+            <button onclick="requestPlayFromHand(${idx})" ${!canAfford ? 'disabled' : ''} class="w-full ${canAfford ? 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} py-1 rounded text-[9px] transition">
+              PLAY (${rawHandCost}M)
+            </button>
+            <div class="flex gap-1">
+              <button onclick="requestSetCard(${idx})" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-0.5 rounded text-[8px] transition">
+                SET (0M)
+              </button>
+              <button onclick="inspectCard(${card.id})" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold py-0.5 rounded text-[8px] transition">
+                INFO
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    function addCommentary(msg) {
+      document.getElementById('commentaryFeed').innerText = msg;
+    }
+
+    function inspectCard(cardId) {
+      const card = CARD_CATALOG[cardId];
+      if (!card) return;
+
+      document.getElementById('inspectContent').innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <span class="text-xs font-bold text-amber-400 uppercase tracking-widest">[${card.category}]</span>
+          <span class="bg-amber-950 text-amber-300 font-mono font-bold text-xs px-2 py-0.5 rounded border border-amber-700">${card.cost} Momentum</span>
+        </div>
+        <h3 class="text-xl font-ring tracking-wider text-white">${card.name}</h3>
+        <div class="flex items-center gap-2 my-2 text-xs font-semibold">
+          ${card.dmg > 0 ? `<span class="text-red-400 font-bold">${card.dmg} Direct Damage</span>` : ''}
+          ${card.recur > 0 ? `<span class="text-purple-400 font-bold">${card.recur} Recurring Tick</span>` : ''}
+          ${card.prop !== 'None' ? `<span class="bg-slate-800 text-amber-300 px-1.5 py-0.5 rounded border border-slate-700 text-[10px]">[${card.prop}]</span>` : ''}
+        </div>
+        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 my-2 leading-relaxed">
+          ${card.flavor}
+        </div>
+        <div class="text-xs space-y-1">
+          <div><b class="text-slate-400">Counters:</b> <span class="text-emerald-400">${card.counters.length > 0 ? card.counters.join(', ') : 'None'}</span></div>
+          <div><b class="text-slate-400">Play from Hand:</b> <span class="text-amber-300">${card.prop === 'Quick' ? 'Printed Cost (1x)' : 'Double Printed Cost (2x)'}</span></div>
+          <div><b class="text-slate-400">Setup Zone Cost:</b> <span class="text-slate-200">0 to place, printed cost to flip</span></div>
+        </div>
+      `;
+      document.getElementById('cardInspectModal').classList.remove('hidden');
+    }
+
+    function openRulebookModal() {
+      const list = document.getElementById('catalogCardList');
+      list.innerHTML = '';
+
+      for (let id in CARD_CATALOG) {
+        const c = CARD_CATALOG[id];
+        const row = document.createElement('div');
+        row.className = "bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between text-xs";
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-5 font-mono text-slate-500 font-bold">#${c.id}</span>
+            <div>
+              <div class="font-bold text-white text-xs flex items-center gap-1.5">
+                <span>${c.name}</span>
+                <span class="text-[9px] text-amber-400">[${c.category}]</span>
+                ${c.prop !== 'None' ? `<span class="text-[9px] bg-slate-800 text-amber-300 px-1 rounded">[${c.prop}]</span>` : ''}
+              </div>
+              <div class="text-[10px] text-slate-400">${c.flavor}</div>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-mono font-bold text-amber-400">${c.cost} Mom</div>
+            ${c.dmg > 0 ? `<div class="text-red-400 font-bold">${c.dmg} Dmg</div>` : ''}
+          </div>
+        `;
+        list.appendChild(row);
+      }
+      document.getElementById('catalogModal').classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    window.onload = function() {
+      // Show lobby on load
+    };
+  </script>
+</body>
+</html>
